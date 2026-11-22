@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'app_style.dart';
+import 'chess/chess_bot.dart';
+import 'chess/chess_game_page.dart';
 import 'kas/state/kas_scope.dart';
 import 'services/local_storage_service.dart';
 import 'services/schedule_controller.dart';
@@ -124,8 +126,18 @@ class _SettingsPageState extends State<SettingsPage> {
         subtitle: const Text('Atur petugas kebersihan setiap hari'),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(builder: (_) => const CleaningScheduleEditorPage()),
+          MaterialPageRoute<void>(
+            builder: (_) => const CleaningScheduleEditorPage(),
+          ),
         ),
+      ),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.extension_outlined),
+        title: const Text('Catur Santai XII RPL'),
+        subtitle: const Text('Main catur lawan bot saat jam kosong'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: _showChessDifficultyDialog,
       ),
       const Divider(),
       TextButton.icon(
@@ -138,7 +150,10 @@ class _SettingsPageState extends State<SettingsPage> {
     ],
   );
 
-  Widget _settingsCard({required String title, required List<Widget> children}) {
+  Widget _settingsCard({
+    required String title,
+    required List<Widget> children,
+  }) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -167,8 +182,14 @@ class _SettingsPageState extends State<SettingsPage> {
           'Editan biodata siswa dan jadwal tetap disimpan.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Reset')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Reset'),
+          ),
         ],
       ),
     );
@@ -176,6 +197,119 @@ class _SettingsPageState extends State<SettingsPage> {
     KasScope.read(context).resetTransactions();
     TaskScope.read(context).clearTasks();
     await _storage.resetKasAndTasks();
+  }
+
+  Future<void> _showChessDifficultyDialog() async {
+    ChessDifficulty selected = ChessDifficulty.medium;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFFFFFFFF),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: Color(0xFFE5DEC9)),
+            ),
+            title: const Text(
+              'Ingin Bermain Catur?',
+              style: TextStyle(
+                color: Color(0xFF0F172A),
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Pilih tingkat kecerdasan bot sebelum memulai permainan.',
+                  style: TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: ChessDifficulty.values.map((difficulty) {
+                    final isSelected = selected == difficulty;
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: InkWell(
+                          onTap: () {
+                            setDialogState(() {
+                              selected = difficulty;
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? const Color(0xFF0F172A)
+                                  : const Color(0xFFFAF6F0),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFF0F172A)
+                                    : const Color(0xFFE5DEC9),
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              difficulty.label,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: isSelected
+                                    ? Colors.white
+                                    : const Color(0xFF0F172A),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+            actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text(
+                  'Batal',
+                  style: TextStyle(color: Color(0xFF64748B)),
+                ),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(dialogCtx);
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ChessGamePage(difficulty: selected),
+                    ),
+                  );
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F172A),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text('Konfirmasi'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildPreviewCard() {
@@ -384,63 +518,102 @@ class _StudentEditorPageState extends State<StudentEditorPage> {
   @override
   Widget build(BuildContext context) {
     final query = _search.text.trim().toLowerCase();
-    final visible = _students.where((student) =>
-      student.displayName.toLowerCase().contains(query) ||
-      student.attendanceNumber.contains(query));
+    final visible = _students.where(
+      (student) =>
+          student.displayName.toLowerCase().contains(query) ||
+          student.attendanceNumber.contains(query),
+    );
     return Scaffold(
       appBar: AppBar(title: const Text('Edit Data Siswa')),
-      body: Column(children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: TextField(
-            key: const ValueKey('student-edit-search'),
-            controller: _search,
-            onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              hintText: 'Cari nama atau nomor absen',
-              border: OutlineInputBorder(),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              key: const ValueKey('student-edit-search'),
+              controller: _search,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: 'Cari nama atau nomor absen',
+                border: OutlineInputBorder(),
+              ),
             ),
           ),
-        ),
-        Expanded(child: ListView.builder(
-          itemCount: visible.length,
-          itemBuilder: (context, index) {
-            final student = visible.elementAt(index);
-            return ListTile(
-              leading: CircleAvatar(child: Text(student.attendanceNumber)),
-              title: Text(student.displayName),
-              subtitle: Text(student.hobby),
-              trailing: const Icon(Icons.edit_outlined),
-              onTap: () => _editStudent(student),
-            );
-          },
-        )),
-      ]),
+          Expanded(
+            child: ListView.builder(
+              itemCount: visible.length,
+              itemBuilder: (context, index) {
+                final student = visible.elementAt(index);
+                return ListTile(
+                  leading: CircleAvatar(child: Text(student.attendanceNumber)),
+                  title: Text(student.displayName),
+                  subtitle: Text(student.hobby),
+                  trailing: const Icon(Icons.edit_outlined),
+                  onTap: () => _editStudent(student),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Future<void> _editStudent(StudentProfile student) async {
     final name = TextEditingController(text: student.name);
     final hobby = TextEditingController(text: student.hobby);
-    final age = TextEditingController(text: student.age.replaceAll(' Tahun', ''));
+    final age = TextEditingController(
+      text: student.age.replaceAll(' Tahun', ''),
+    );
     final birthParts = student.birthPlaceAndDate.split(',');
-    final place = TextEditingController(text: birthParts.isEmpty ? '' : birthParts.first.trim());
-    final birthDate = TextEditingController(text: birthParts.length > 1 ? birthParts.skip(1).join(',').trim() : '');
+    final place = TextEditingController(
+      text: birthParts.isEmpty ? '' : birthParts.first.trim(),
+    );
+    final birthDate = TextEditingController(
+      text: birthParts.length > 1 ? birthParts.skip(1).join(',').trim() : '',
+    );
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('Edit ${student.displayName}'),
-        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: name, decoration: const InputDecoration(labelText: 'Nama Lengkap')),
-          TextField(controller: hobby, decoration: const InputDecoration(labelText: 'Hobi')),
-          TextField(controller: place, decoration: const InputDecoration(labelText: 'Tempat Lahir')),
-          TextField(controller: birthDate, decoration: const InputDecoration(labelText: 'Tanggal Lahir')),
-          TextField(controller: age, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Umur')),
-        ])),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: name,
+                decoration: const InputDecoration(labelText: 'Nama Lengkap'),
+              ),
+              TextField(
+                controller: hobby,
+                decoration: const InputDecoration(labelText: 'Hobi'),
+              ),
+              TextField(
+                controller: place,
+                decoration: const InputDecoration(labelText: 'Tempat Lahir'),
+              ),
+              TextField(
+                controller: birthDate,
+                decoration: const InputDecoration(labelText: 'Tanggal Lahir'),
+              ),
+              TextField(
+                controller: age,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Umur'),
+              ),
+            ],
+          ),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Simpan')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Simpan'),
+          ),
         ],
       ),
     );
@@ -449,10 +622,14 @@ class _StudentEditorPageState extends State<StudentEditorPage> {
         name: name.text.trim(),
         hobby: hobby.text.trim(),
         age: age.text.trim().isEmpty ? '' : '${age.text.trim()} Tahun',
-        birthPlaceAndDate: [place.text.trim(), birthDate.text.trim()]
-            .where((value) => value.isNotEmpty).join(', '),
+        birthPlaceAndDate: [
+          place.text.trim(),
+          birthDate.text.trim(),
+        ].where((value) => value.isNotEmpty).join(', '),
       );
-      final index = _students.indexWhere((item) => item.number == student.number);
+      final index = _students.indexWhere(
+        (item) => item.number == student.number,
+      );
       if (index >= 0) _students[index] = updated;
       await _storage.saveStudents(_students);
       if (!mounted) return;
@@ -460,7 +637,7 @@ class _StudentEditorPageState extends State<StudentEditorPage> {
         noAbsen: updated.number,
         name: updated.displayName,
         photoPath: updated.photoPath,
-      ); 
+      );
       setState(() {});
     }
     name.dispose();
@@ -486,25 +663,46 @@ class ScheduleEditorPage extends StatelessWidget {
         itemBuilder: (context, dayIndex) => Card(
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(days[dayIndex].day, style: const TextStyle(fontWeight: FontWeight.bold)),
-              for (var subjectIndex = 0; subjectIndex < days[dayIndex].subjects.length; subjectIndex++)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(days[dayIndex].subjects[subjectIndex]),
-                  leading: CircleAvatar(child: Text('${subjectIndex + 1}')),
-                  trailing: const Icon(Icons.edit_outlined),
-                  onTap: () => _editSubject(context, controller, dayIndex, subjectIndex, days[dayIndex].subjects[subjectIndex]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  days[dayIndex].day,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-            ]),
+                for (
+                  var subjectIndex = 0;
+                  subjectIndex < days[dayIndex].subjects.length;
+                  subjectIndex++
+                )
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(days[dayIndex].subjects[subjectIndex]),
+                    leading: CircleAvatar(child: Text('${subjectIndex + 1}')),
+                    trailing: const Icon(Icons.edit_outlined),
+                    onTap: () => _editSubject(
+                      context,
+                      controller,
+                      dayIndex,
+                      subjectIndex,
+                      days[dayIndex].subjects[subjectIndex],
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Future<void> _editSubject(BuildContext context, ScheduleController schedule,
-      int dayIndex, int subjectIndex, String value) async {
+  Future<void> _editSubject(
+    BuildContext context,
+    ScheduleController schedule,
+    int dayIndex,
+    int subjectIndex,
+    String value,
+  ) async {
     final text = TextEditingController(text: value);
     final updated = await showDialog<String>(
       context: context,
@@ -512,13 +710,20 @@ class ScheduleEditorPage extends StatelessWidget {
         title: const Text('Ubah mata pelajaran'),
         content: TextField(controller: text, autofocus: true),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, text.text), child: const Text('Simpan')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, text.text),
+            child: const Text('Simpan'),
+          ),
         ],
       ),
     );
     text.dispose();
-    if (updated != null) schedule.updateSubject(dayIndex, subjectIndex, updated);
+    if (updated != null)
+      schedule.updateSubject(dayIndex, subjectIndex, updated);
   }
 }
 
@@ -526,10 +731,12 @@ class CleaningScheduleEditorPage extends StatefulWidget {
   const CleaningScheduleEditorPage({super.key});
 
   @override
-  State<CleaningScheduleEditorPage> createState() => _CleaningScheduleEditorPageState();
+  State<CleaningScheduleEditorPage> createState() =>
+      _CleaningScheduleEditorPageState();
 }
 
-class _CleaningScheduleEditorPageState extends State<CleaningScheduleEditorPage> {
+class _CleaningScheduleEditorPageState
+    extends State<CleaningScheduleEditorPage> {
   final LocalStorageService _storage = LocalStorageService();
   List<StudentProfile> _allStudents = [];
 
@@ -556,8 +763,20 @@ class _CleaningScheduleEditorPageState extends State<CleaningScheduleEditorPage>
         itemBuilder: (context, dayIndex) {
           final schedule = days[dayIndex];
           final students = schedule.picketNumbers
-              .map((n) => _allStudents.firstWhere((s) => s.number == n, 
-                  orElse: () => StudentProfile(number: n, name: 'Siswa $n', age: '', attendanceNumber: '', hobby: '', birthPlaceAndDate: '', photoPath: '')))
+              .map(
+                (n) => _allStudents.firstWhere(
+                  (s) => s.number == n,
+                  orElse: () => StudentProfile(
+                    number: n,
+                    name: 'Siswa $n',
+                    age: '',
+                    attendanceNumber: '',
+                    hobby: '',
+                    birthPlaceAndDate: '',
+                    photoPath: '',
+                  ),
+                ),
+              )
               .toList();
 
           return Card(
@@ -570,9 +789,20 @@ class _CleaningScheduleEditorPageState extends State<CleaningScheduleEditorPage>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(schedule.day, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text(
+                        schedule.day,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
                       TextButton.icon(
-                        onPressed: () => _editDayPicket(context, controller, dayIndex, schedule.picketNumbers),
+                        onPressed: () => _editDayPicket(
+                          context,
+                          controller,
+                          dayIndex,
+                          schedule.picketNumbers,
+                        ),
                         icon: const Icon(Icons.edit_outlined, size: 18),
                         label: const Text('Ubah Petugas'),
                       ),
@@ -581,15 +811,25 @@ class _CleaningScheduleEditorPageState extends State<CleaningScheduleEditorPage>
                   const Divider(),
                   const SizedBox(height: 8),
                   if (students.isEmpty)
-                    const Text('Belum ada petugas', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey))
+                    const Text(
+                      'Belum ada petugas',
+                      style: TextStyle(
+                        fontStyle: FontStyle.italic,
+                        color: Colors.grey,
+                      ),
+                    )
                   else
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: students.map((s) => Chip(
-                        label: Text(s.displayName),
-                        visualDensity: VisualDensity.compact,
-                      )).toList(),
+                      children: students
+                          .map(
+                            (s) => Chip(
+                              label: Text(s.displayName),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          )
+                          .toList(),
                     ),
                 ],
               ),
@@ -600,7 +840,12 @@ class _CleaningScheduleEditorPageState extends State<CleaningScheduleEditorPage>
     );
   }
 
-  Future<void> _editDayPicket(BuildContext context, ScheduleController controller, int dayIndex, List<int> current) async {
+  Future<void> _editDayPicket(
+    BuildContext context,
+    ScheduleController controller,
+    int dayIndex,
+    List<int> current,
+  ) async {
     final selected = List<int>.from(current);
     final result = await showDialog<List<int>>(
       context: context,
@@ -617,7 +862,9 @@ class _CleaningScheduleEditorPageState extends State<CleaningScheduleEditorPage>
                 final isSelected = selected.contains(student.number);
                 return CheckboxListTile(
                   title: Text(student.displayName),
-                  secondary: CircleAvatar(child: Text(student.attendanceNumber)),
+                  secondary: CircleAvatar(
+                    child: Text(student.attendanceNumber),
+                  ),
                   value: isSelected,
                   onChanged: (val) {
                     setDialogState(() {
@@ -633,8 +880,14 @@ class _CleaningScheduleEditorPageState extends State<CleaningScheduleEditorPage>
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
-            FilledButton(onPressed: () => Navigator.pop(context, selected), child: const Text('Simpan')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, selected),
+              child: const Text('Simpan'),
+            ),
           ],
         ),
       ),
@@ -645,4 +898,3 @@ class _CleaningScheduleEditorPageState extends State<CleaningScheduleEditorPage>
     }
   }
 }
-
