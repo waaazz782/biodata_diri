@@ -722,8 +722,9 @@ class ScheduleEditorPage extends StatelessWidget {
       ),
     );
     text.dispose();
-    if (updated != null)
-      schedule.updateSubject(dayIndex, subjectIndex, updated);
+   if (updated != null) {
+  schedule.updateSubject(dayIndex, subjectIndex, updated);
+}
   }
 }
 
